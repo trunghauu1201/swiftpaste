@@ -1,34 +1,25 @@
-const express = require('express');
-const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http, { 
-    maxHttpBufferSize: 1e8, 
-    cors: { origin: "*" } 
-});
-const { google } = require('googleapis');
-const fs = require('fs');
-const path = require('path');
-const Busboy = require('busboy');
+// --- ĐOẠN CODE ĐỌC BIẾN MÔI TRƯỜNG ---
+const credentials = process.env.CREDENTIALS_JSON 
+    ? JSON.parse(process.env.CREDENTIALS_JSON) 
+    : require('./credentials.json');
 
-app.use(express.static('public'));
+// Link redirect linh hoạt: chạy local thì dùng localhost, chạy web thì dùng link Render
+const REDIRECT_URI = process.env.RENDER_EXTERNAL_URL 
+    ? `${process.env.RENDER_EXTERNAL_URL}/oauth2callback` 
+    : 'http://localhost:3000/oauth2callback';
 
-// --- 1. CẤU HÌNH OAUTH2 (THÔNG TIN CỦA BẠN) ---
-const CLIENT_ID = '605650321702-v9p9r1o96bbsncogh2h12ihkte5knvut.apps.googleusercontent.com';
-const CLIENT_SECRET = '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';
-const REDIRECT_URI = 'http://localhost:3000/oauth2callback';
+const oauth2Client = new google.auth.OAuth2(
+    credentials.web.client_id,
+    credentials.web.client_secret,
+    REDIRECT_URI
+);
 
-const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
-const TOKEN_PATH = path.join(__dirname, 'token.json');
-
-// Tự động nạp Token để dùng 5TB chính chủ
-if (fs.existsSync(TOKEN_PATH)) {
-    oauth2Client.setCredentials(JSON.parse(fs.readFileSync(TOKEN_PATH)));
+// Tự động nạp Token
+if (process.env.TOKEN_JSON) {
+    oauth2Client.setCredentials(JSON.parse(process.env.TOKEN_JSON));
+} else {
+    oauth2Client.setCredentials(JSON.parse(fs.readFileSync('token.json')));
 }
-
-const drive = google.drive({ version: 'v3', auth: oauth2Client });
-const GOOGLE_DRIVE_FOLDER_ID = '19II18cTi4mHfH5VC-B081qhc3Jn6pS1g'; 
-const roomsData = {};
-
 // --- 2. CÁC HÀM HỖ TRỢ ---
 async function deleteFromDrive(fileId) {
     try {
