@@ -1,9 +1,34 @@
-// --- ĐOẠN CODE ĐỌC BIẾN MÔI TRƯỜNG ---
-const credentials = process.env.CREDENTIALS_JSON 
-    ? JSON.parse(process.env.CREDENTIALS_JSON) 
-    : require('./credentials.json');
+const express = require('express');
+const app = express();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http, { 
+    maxHttpBufferSize: 1e8, 
+    cors: { origin: "*" } 
+});
+const { google } = require('googleapis');
+const fs = require('fs');
+const path = require('path');
+const Busboy = require('busboy');
 
-// Link redirect linh hoạt: chạy local thì dùng localhost, chạy web thì dùng link Render
+app.use(express.static('public'));
+
+// --- 1. CẤU HÌNH BIẾN MÔI TRƯỜNG & OAUTH2 ---
+
+// ID Thư mục Google Drive của bạn (Giữ nguyên cái cũ)
+const GOOGLE_DRIVE_FOLDER_ID = '19II18cTi4mHfH5VC-B081qhc3Jn6pS1g'; 
+const TOKEN_PATH = path.join(__dirname, 'token.json');
+
+// Đọc Credentials từ Environment (Render) hoặc File (Máy nhà)
+let credentials;
+try {
+    credentials = process.env.CREDENTIALS_JSON 
+        ? JSON.parse(process.env.CREDENTIALS_JSON) 
+        : require('./credentials.json');
+} catch (e) {
+    console.error("❌ Lỗi: Không tìm thấy Credentials! Hãy kiểm tra Environment Variables.");
+}
+
+// Link Redirect: Tự động đổi giữa Render và Localhost
 const REDIRECT_URI = process.env.RENDER_EXTERNAL_URL 
     ? `${process.env.RENDER_EXTERNAL_URL}/oauth2callback` 
     : 'http://localhost:3000/oauth2callback';
@@ -14,12 +39,16 @@ const oauth2Client = new google.auth.OAuth2(
     REDIRECT_URI
 );
 
-// Tự động nạp Token
+// Nạp Token: Ưu tiên Render TOKEN_JSON
 if (process.env.TOKEN_JSON) {
     oauth2Client.setCredentials(JSON.parse(process.env.TOKEN_JSON));
-} else {
-    oauth2Client.setCredentials(JSON.parse(fs.readFileSync('token.json')));
+} else if (fs.existsSync(TOKEN_PATH)) {
+    oauth2Client.setCredentials(JSON.parse(fs.readFileSync(TOKEN_PATH)));
 }
+
+const drive = google.drive({ version: 'v3', auth: oauth2Client });
+const roomsData = {};
+
 // --- 2. CÁC HÀM HỖ TRỢ ---
 async function deleteFromDrive(fileId) {
     try {
@@ -42,7 +71,7 @@ function updateRoomStatus(roomId) {
     }
 }
 
-// --- 3. ROUTE UPLOAD (STREAMING + CHÍNH CHỦ 5TB) ---
+// --- 3. ROUTE UPLOAD (DÙNG CHO 5TB) ---
 app.post('/upload', (req, res) => {
     const busboy = Busboy({ headers: req.headers });
     let roomId = '';
@@ -59,8 +88,6 @@ app.post('/upload', (req, res) => {
             return res.status(404).send('Phòng không tồn tại');
         }
 
-        console.log(`📡 Đang đẩy [${filename}] lên 5TB chính chủ...`);
-
         drive.files.create({
             resource: { 'name': filename, 'parents': [GOOGLE_DRIVE_FOLDER_ID] },
             media: { mimeType: mimeType, body: file },
@@ -73,8 +100,6 @@ app.post('/upload', (req, res) => {
             }
 
             const fileId = response.data.id;
-
-            // Cấp quyền công khai để máy khác tải được luôn
             try {
                 await drive.permissions.create({
                     fileId: fileId,
@@ -100,7 +125,6 @@ app.post('/upload', (req, res) => {
     req.pipe(busboy);
 });
 
-// Route callback (Giữ lại để phòng trường hợp bạn cần xác thực lại)
 app.get('/oauth2callback', async (req, res) => {
     const { code } = req.query;
     const { tokens } = await oauth2Client.getToken(code);
@@ -172,6 +196,7 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = 3000;
-const serverInstance = http.listen(PORT, () => console.log(`🚀 SwiftPaste 5TB Pro Ready trên port ${PORT}`));
+// --- FIX PORT CHO RENDER ---
+const PORT = process.env.PORT || 3000; 
+const serverInstance = http.listen(PORT, () => console.log(`🚀 SwiftPaste Ready trên port ${PORT}`));
 serverInstance.timeout = 600000;
