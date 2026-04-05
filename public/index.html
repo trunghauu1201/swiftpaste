@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwiftPaste by THau</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <div id="toast" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:10px 20px; border-radius:99px; display:none; z-index:1000; font-size:14px; font-weight:600;"></div>
+
+    <div class="container">
+        <div id="lobby" class="active">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="margin:0;">🚀 SwiftPaste</h2>
+                <button onclick="toggleTheme()" style="background:none; border:none; cursor:pointer; font-size:20px;">🌓</button>
+            </div>
+            
+            <button class="btn btn-primary" style="margin-top:20px;" onclick="socket.emit('create-room')">✨ Tạo Phòng Mới</button>
+            
+            <div style="text-align:center;">
+                <p style="opacity:0.5; font-size:12px; font-weight:700; margin:15px 0 10px 0;">HOẶC NHẬP MÃ PHÒNG</p>
+                <input type="text" id="roomInput" placeholder="ABCDE" maxlength="5" onkeypress="if(event.key==='Enter') joinRoom()">
+                <button class="btn btn-secondary" style="margin-top:15px;" onclick="joinRoom()">Vào phòng</button>
+            </div>
+        </div>
+
+        <div id="workspace">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <button class="btn" style="padding:6px 12px; background:var(--border); color:var(--text);" onclick="exitRoom()">⬅ Thoát</button>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="btn" style="background:#fee2e2; color:#ef4444; padding:6px 12px;" onclick="destroyRoom()">💣 Hủy</button>
+                    <button onclick="toggleTheme()" style="background:none; border:none; cursor:pointer; font-size:20px;">🌓</button>
+                </div>
+            </div>
+
+            <div style="text-align:center;">
+                <h1 id="roomDisplay" style="margin:10px 0; color:var(--primary); letter-spacing:3px;"></h1>
+                <p style="font-weight:700; font-size:14px; margin:0 0 15px 0;">👥 <span id="userCount">1</span> Online | <span id="uploadStatus">Sẵn sàng</span></p>
+                <div id="qrcode" style="display:inline-block; padding:10px; background:white; border-radius:12px; border:1px solid var(--border);"></div>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-add" onclick="addBlock('text')">📝 Thêm Chữ</button>
+                <button class="btn btn-file" onclick="document.getElementById('hiddenFile').click()">☁️ Tải File</button>
+                <input type="file" id="hiddenFile" style="display: none;" onchange="handleFileUpload(this.files[0])">
+            </div>
+
+            <div id="blocksContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentRoom = '';
+
+        function toggleTheme() { document.body.classList.toggle('dark-mode'); }
+        
+        function showToast(msg) {
+            const t = document.getElementById("toast"); t.innerText = msg; t.style.display = "block";
+            setTimeout(() => t.style.display = "none", 3000);
+        }
+
+        function showView(viewId) {
+            document.getElementById('lobby').classList.remove('active');
+            document.getElementById('workspace').classList.remove('active');
+            document.getElementById(viewId).classList.add('active');
+        }
+
+        socket.on('user-count', c => document.getElementById('userCount').innerText = c);
+        socket.on('room-created', id => enterWorkspace(id, []));
+        socket.on('room-joined', d => enterWorkspace(d.roomId, d.history));
+        socket.on('room-destroyed', () => { showToast("💥 Phòng đã bị hủy!"); resetLobby(); });
+
+        function enterWorkspace(id, history) {
+            currentRoom = id.toUpperCase();
+            showView('workspace');
+            document.getElementById('roomDisplay').innerText = currentRoom;
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById("qrcode"), { text: window.location.origin + "/?room=" + currentRoom, width: 120, height: 120 });
+            document.getElementById('blocksContainer').innerHTML = "";
+            history.forEach(b => renderBlock(b));
+        }
+
+        function joinRoom() { 
+            const id = document.getElementById('roomInput').value.trim().toUpperCase(); 
+            if(id) socket.emit('join-room', id); 
+        }
+
+        function handleFileUpload(file) {
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('roomId', currentRoom);
+            formData.append('file', file);
+            const xhr = new XMLHttpRequest();
+            const statusEl = document.getElementById('uploadStatus');
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const p = Math.round((e.loaded / e.total) * 100);
+                    statusEl.innerHTML = `<b style="color:var(--primary)">Tải: ${p}%</b>`;
+                }
+            };
+            xhr.onload = () => {
+                statusEl.innerText = "Sẵn sàng";
+                if (xhr.status === 200) showToast("✅ Thành công!");
+                else showToast("❌ Lỗi!");
+                socket.emit('join-room', currentRoom);
+            };
+            xhr.open('POST', '/upload', true);
+            xhr.send(formData);
+        }
+
+        function addBlock(type) { socket.emit('add-block', { roomId: currentRoom, type }); }
+        socket.on('block-added', b => renderBlock(b));
+
+        function renderBlock(block) {
+            const container = document.getElementById('blocksContainer');
+            const div = document.createElement('div');
+            div.className = 'block-item';
+            div.id = block.id;
+            let html = `<button class="btn-delete" onclick="deleteBlock('${block.id}')">✕</button>`;
+            if (block.type === 'text') {
+                html += `<textarea oninput="updateText('${block.id}', this.value)">${block.content}</textarea>`;
+            } else {
+                html += `<div style="text-align:center;"><p style="margin:0 0 10px 0; font-weight:700;">📄 ${block.fileName}</p><a href="${block.content}" target="_blank" style="color:var(--primary); font-weight:bold; text-decoration:none;">⬇️ Tải xuống</a></div>`;
+            }
+            div.innerHTML = html;
+            container.prepend(div);
+        }
+
+        function updateText(id, val) { socket.emit('update-block', { roomId: currentRoom, blockId: id, content: val, senderId: socket.id }); }
+        socket.on('block-updated', d => {
+            const el = document.getElementById(d.blockId);
+            if (el && el.querySelector('textarea') && socket.id !== d.senderId) el.querySelector('textarea').value = d.content;
+        });
+
+        function deleteBlock(id) { socket.emit('delete-block', { roomId: currentRoom, blockId: id }); }
+        socket.on('block-deleted', id => document.getElementById(id)?.remove());
+
+        function exitRoom() { socket.emit('leave-room', currentRoom); resetLobby(); }
+        function destroyRoom() { if(confirm('Hủy phòng?')) socket.emit('destroy-room', currentRoom); }
+        function resetLobby() { 
+            currentRoom = ''; showView('lobby'); 
+            window.history.pushState({}, "", "/"); 
+        }
+        
+        window.onload = () => {
+            const r = new URLSearchParams(window.location.search).get('room');
+            if (r) socket.emit('join-room', r.toUpperCase());
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Các file chứa mã bí mật (Cực kỳ quan trọng)
+credentials.json
+token.json
+
+# Thư mục thư viện (Không cần up vì server sẽ tự cài lại)
+node_modules/
+
+# Các file rác của hệ điều hành
+.DS_Store
+Thumbs.db
+
+# File nhật ký lỗi
+npm-debug.log*

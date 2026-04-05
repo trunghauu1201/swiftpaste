@@ -1,0 +1,78 @@
+:root {
+    --primary: #4f46e5;
+    --bg-body: #f8fafc;
+    --card-bg: #ffffff;
+    --text: #1e293b;
+    --border: #e2e8f0;
+}
+
+body.dark-mode {
+    --bg-body: #0f172a;
+    --card-bg: #1e293b;
+    --text: #f1f5f9;
+    --border: #334155;
+}
+
+body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg-body);
+    color: var(--text);
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    width: 95%;
+    max-width: 550px;
+    background: var(--card-bg);
+    padding: 35px;
+    border-radius: 24px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+/* Logic ẩn hiện Workspace/Lobby */
+#lobby, #workspace { display: none; flex-direction: column; gap: 20px; }
+#lobby.active, #workspace.active { display: flex; }
+
+/* DESIGN Ô NHẬP MÃ (Bản bạn đã duyệt) */
+#roomInput {
+    width: 100%;
+    padding: 16px;
+    border-radius: 12px;
+    border: 2px solid var(--border);
+    background: var(--bg-body);
+    color: var(--primary);
+    text-align: center;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 5px;
+    outline: none;
+    text-transform: uppercase;
+    box-sizing: border-box;
+}
+#roomInput:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1); }
+
+/* Buttons */
+.btn { padding: 14px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer; font-size: 16px; transition: 0.2s; }
+.btn-primary { background: var(--primary); color: white; width: 100%; }
+.btn-secondary { background: #64748b; color: white; width: 100%; }
+.btn-add { background: #10b981; color: white; flex: 1; }
+.btn-file { background: #8b5cf6; color: white; flex: 1; }
+
+/* Blocks */
+.block-item {
+    background: var(--bg-body);
+    padding: 20px;
+    border-radius: 15px;
+    margin-top: 15px;
+    border: 1px solid var(--border);
+    position: relative;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+}
+textarea { width: 100%; border: none; background: none; color: inherit; outline: none; font-family: inherit; font-size: 16px; resize: vertical; min-height: 50px; }
+.btn-delete { position: absolute; top: 5px; right: 5px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 10px; }
